@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" type="text/css" href="https://cdn.mxpnl.com/libs/mixpanel-platform/css/reset.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.mxpnl.com/libs/mixpanel-platform/build/mixpanel-platform.v0.latest.min.css">
+    <style type="text/css">
+      .page_header {
+        border-bottom: 1px solid #cfd4dc;
+        position: relative;
+        background: #eff3f5;
+        padding: 15px 20px;
+      }
+      .platform_app_name {
+        color: #5c617b;
+        display: inline-block;
+        font-size: 20px;
+        font-weight: 500;
+        line-height: 35px;
+      }
+      .description_view {
+        border-bottom: 1px solid #cfd4dc;
+        background: #eff3f5;
+        color: #747d94;
+        font-family: "Helvetica Neue",sans-serif;
+        font-weight: 500;
+        font-size: 13px;
+        height: 35px;
+        line-height: 33px;
+        padding-left: 20px;
+      }
+    </style>
+    <script src="https://cdn.mxpnl.com/libs/mixpanel-platform/build/mixpanel-platform.v0.latest.min.js"></script>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/humanize-duration/3.10.0/humanize-duration.min.js"></script>
+  </head>
+  <body class="mixpanel-platform-body">
+
+  <div class="page_header">
+    <div class="platform_app_name">Duration Between MovieEnd and MoviePlay</div>
+    <div id="description_view">
+      This report shows a histogram of the average duration between MovieEnd and MoviePlay events by user.<br />
+      The table under the graph shows min, max, average, and median values for the data set.
+    </div>
+  </div>
+  <br />
+
+    <div class="mixpanel-platform-section">
+      <div id="timeFieldWrap" style="float: left;">
+        <div id="by" class="mixpanel-platform-label" style="margin-left: 10px; width: auto; padding: 0 10px;">MovieEnd with </div>
+        <div id="timeFieldSelect" style="float: left;"></div>
+        <div id="timeConditionWrap" style="float: left; display: none;">
+          <div id="timeConditionSelect" style="float: left;"></div>
+          <div id="timeValueSelect" style="float: left;"></div>
+        </div>
+        <br  style="clear:both;" />
+      </div>
+      <br  style="clear:both;" />
+      <div id="countrySelect" style="float: left;"></div>
+      <div id="deviceTypeSelect" style="float: left;"></div>
+      <div id="accountTypeSelect" style="float: left;"></div>
+      <div id="accountStatusSelect" style="float: left;"></div>
+      <br  style="clear:both;" />
+    </div>
+    <div class="mixpanel-platform-section">
+      <div id="dateSelect" style="float: right;"></div>
+      <div style="clear: both;"></div>
+      <div id="graph"></div>
+    </div>
+    <div id="table"></div>
+
+
+    <script>
+      var timeFieldSelect = $('#timeFieldSelect').MPSelect({
+        items: [
+          {label: 'no time condition', value: ''},
+          {label: 'remaining time', value: 'remainingtime'},
+          {label: 'elapsed time', value: 'elapsedtime'},
+        ]
+      }).on('change', function() {
+        if ($(this).val()) {
+          $('#timeConditionWrap').show();
+        } else {
+          $('#timeConditionWrap').hide();
+        }
+        runQuery();
+      });
+      var timeConditionSelect = $('#timeConditionSelect').MPSelect({
+        items: [
+          {label: 'greater than', value: '>'},
+          {label: 'less than', value: '<'}
+        ]
+      }).val('<').on('change', runQuery)
+      var timeValueSelect = $('#timeValueSelect').MPSelect({
+        items: [
+          {label: '1 minute', value: 60},
+          {label: '5 minutes', value: 5*60},
+          {label: '10 minutes', value: 10*60},
+          {label: '15 minutes', value: 15*60},
+          {label: '30 minutes', value: 30*60},
+          {label: '45 minutes', value: 30*60},
+          {label: '60 minutes', value: 60*60},
+        ]
+      }).val(10*60).on('change', runQuery)
+
+      var deviceTypeSelect = $('#deviceTypeSelect').MPSelect({
+        items: [
+          {label: 'All Devices', value: ''},
+          {label: 'Android', value: 'Android'},
+          {label: 'iOS', value: 'iOS'},
+          {label: 'web', value: 'web'},
+          {label: 'STB', value: 'STB'},
+          {label: 'TV', value: 'TV'},
+        ]
+      }).on('change', runQuery);
+      var accountTypeSelect = $('#accountTypeSelect').MPSelect({
+        items: [
+          {label: 'All Account Types', value: ''},
+          {label: 'asiaplay', value: 'asiaplay'},
+          {label: 'foxconn', value: 'foxconn'},
+          {label: 'facebook', value: 'facebook'},
+          {label: 'indihome', value: 'indihome'},
+        ]
+      }).on('change', runQuery);
+      var accountStatusSelect = $('#accountStatusSelect').MPSelect({
+        items: [
+          {label: 'All Account Statuses', value: ''},
+          {label: 'basic', value: 'basic'},
+          {label: 'premium', value: 'premium'},
+          {label: 'vip', value: 'vip'},
+        ]
+      }).on('change', runQuery);
+      var countrySelect = $('#countrySelect').MPSelect({
+        items: [
+          {label: 'All Countries', value: ''},
+          {label: 'Taiwan', value: 'TW'},
+          {label: 'Indonesia', value: 'ID'},
+          {label: 'Singapore', value: 'SG'}
+        ]
+      }).val('TW').on('change', runQuery);
+      var dateSelect  = $('#dateSelect').MPDatepicker().on('change', runQuery);
+
+      var eventGraph = $('#graph').MPChart({
+        chartType: 'bar',
+        xLabel: 'Duration',
+        yLabel: 'Users',
+        highchartsOptions: {
+          plotOptions: {
+            column: {
+              pointPadding: 0,
+              borderWidth: 0,
+              groupPadding: 0,
+              shadow: false
+              }
+          }
+        }
+      });
+      var eventTable = $('#table').MPTable({firstColHeader: '# Movies Watched'}).MPTable('setData', {'': { Users: null }});
+      eventGraph.MPChart('setData', null);
+
+      function runQuery() {
+        var accountType = accountTypeSelect.val();
+        var accountStatus = accountStatusSelect.val();
+        var deviceType = deviceTypeSelect.val();
+        var country = countrySelect.val();
+        var date = dateSelect.val();
+        var timeField = timeFieldSelect.val();
+        var timeCondition = timeConditionSelect.val();
+        var timeValue = timeValueSelect.val();
+
+        var selector = '';
+        if (country) {
+          selector = 'properties["mp_country_code"] == "'+country+'"'
+        }
+        if (accountType) {
+          selector += (selector ? ' and ' : '') + 'properties["accountType"] == "'+accountType+'"'
+        }
+        if (accountStatus) {
+          selector += (selector ? ' and ' : '') + 'properties["accountStatus"] == "'+accountStatus+'"'
+        }
+        if (deviceType) {
+          selector += (selector ? ' and ' : '') + 'properties["deviceType"] == "'+deviceType+'"'
+        }
+
+        var movieEndSelector = selector;
+
+        if (timeField) {
+          movieEndSelector += (movieEndSelector ? ' and ' : '') + 'properties["'+timeField+'"] '+timeCondition+' '+timeValue+' and (defined (properties["'+timeField+'"]))'
+        }
+
+        var params = {
+          from_date: date.from.toISOString().split('T')[0],
+          to_date: date.to.toISOString().split('T')[0],
+          event_selectors: [{
+            event: 'MoviePlay', selector: selector
+          },{
+            event: 'MovieEnd', selector: movieEndSelector
+          }]
+        };
+
+        MP.api.jql(function main() {
+          return Events(params)
+          .groupByUser(function(state, events) {
+            state = state || { events: [] };
+            if (events.length == 0) {
+                return state;
+            }
+            for (var i = 0; i < events.length; i++) {
+              state.events.push({
+                name: events[i].name,
+                time: events[i].time,
+                movie: events[i].properties.movie
+              });
+            }
+            return state;
+          }).map(function(item) {
+            var lastEndTime, lastMovieName;
+            var timeBetweens = [];
+            var all = item.value.events;
+            all = all.sort(function(a, b) {
+              return a.time - b.time;
+            });
+            var sum = 0;
+            for (var i = 0; i < all.length; i++) {
+              if (all[i].name == 'MovieEnd') {
+                lastEndTime = all[i].time;
+                lastMovieName = all[i].movie;
+              } else if (all[i].name == 'MoviePlay' && lastEndTime && all[i].movie != lastMovieName) {
+                var value = all[i].time - lastEndTime;
+                sum += value;
+                timeBetweens.push(value);
+                lastEndTime = lastMovieName = null;
+              }
+            }
+            return (sum/timeBetweens.length);
+          }).filter(function(item) {
+            return item;
+          })
+        }, params).done(function(results) {
+          if (!results.length) {
+            alert('No data found for selected conditions and date range');
+          }
+
+          results = results.sort(function(a, b) {
+            return a - b;
+          });
+          var sum = 0;
+          for (var i = 0; i < results.length; i++) {
+            sum += results[i];
+          }
+          var avg = Math.round(sum/results.length);
+          var min = results[0];
+          var max = results[results.length-1];
+          var lowMiddle = Math.floor((results.length - 1) / 2);
+          var highMiddle = Math.ceil((results.length - 1) / 2);
+          var median = (results[lowMiddle] + results[highMiddle]) / 2;
+
+          var bins = d3.histogram()
+              // .domain(x.domain())
+              .thresholds(100)
+              (results);
+
+          var chartValues = {};
+          var tableValues = {
+            'Min': { 'Duration': humanizeDuration(min,{round:true})},
+            'Max': { 'Duration': humanizeDuration(max,{round:true})},
+            'Average': { 'Duration': humanizeDuration(avg,{round:true})},
+            'Median': { 'Duration': humanizeDuration(median,{round:true})}
+          };
+          for (var i = 0; i < bins.length; i++) {
+            var key = humanizeDuration(bins[i].x0, {round:true,largest:2}) + ' - ' +  humanizeDuration(bins[i].x1, {round:true,largest:2});
+            chartValues[key] = bins[i].length;
+            // chartValues[key]++;
+            // tableValues[key] = { Users: results[i].value }
+          }
+          eventTable.MPTable('setData', tableValues);
+          eventGraph.MPChart('setData', chartValues);
+        });
+      }
+      runQuery();
+    </script>
+  </body>
+</html>

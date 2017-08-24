@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" type="text/css" href="https://cdn.mxpnl.com/libs/mixpanel-platform/css/reset.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.mxpnl.com/libs/mixpanel-platform/build/mixpanel-platform.v0.latest.min.css">
+    <style type="text/css">
+      .page_header {
+        border-bottom: 1px solid #cfd4dc;
+        position: relative;
+        background: #eff3f5;
+        padding: 15px 20px;
+      }
+      .platform_app_name {
+        color: #5c617b;
+        display: inline-block;
+        font-size: 20px;
+        font-weight: 500;
+        line-height: 35px;
+      }
+      .description_view {
+        border-bottom: 1px solid #cfd4dc;
+        background: #eff3f5;
+        color: #747d94;
+        font-family: "Helvetica Neue",sans-serif;
+        font-weight: 500;
+        font-size: 13px;
+        height: 35px;
+        line-height: 33px;
+        padding-left: 20px;
+      }
+    </style>
+    <script src="https://cdn.mxpnl.com/libs/mixpanel-platform/build/mixpanel-platform.v0.latest.min.js"></script>
+  </head>
+  <body class="mixpanel-platform-body">
+
+    <div class="page_header">
+      <div class="platform_app_name">Devices Used by User to Watch Movies</div>
+      <div id="description_view">
+        This report shows the number of users who watch on 1 deviceType, 2 deviceTypes, 3 deviceTypes, etc.<br />
+        You can choose to base the report on the "MoviePlay" or "MovieEnd" event with various conditions.
+      </div>
+    </div>
+    <br />
+
+    <div class="mixpanel-platform-section">
+      <div id="eventSelect" style="float: left;"></div>
+      <div id="timeFieldWrap" style="float: left; display: none;">
+        <div id="by" class="mixpanel-platform-label" style="margin-left: 10px; width: auto; padding: 0 10px;">with</div>
+        <div id="timeFieldSelect" style="float: left;"></div>
+        <div id="timeConditionWrap" style="float: left; display: none;">
+          <div id="timeConditionSelect" style="float: left;"></div>
+          <div id="timeValueSelect" style="float: left;"></div>
+        </div>
+      </div>
+      <br style="clear:both" />
+      <br style="clear:both" />
+      <div id="countrySelect" style="float: left;"></div>
+      <div id="deviceTypeSelect" style="float: left;"></div>
+      <div id="accountTypeSelect" style="float: left;"></div>
+      <div id="accountStatusSelect" style="float: left;"></div>
+      <br  style="clear:both;" />
+    </div>
+    <div class="mixpanel-platform-section">
+      <div id="dateSelect" style="float: right;"></div>
+      <div style="clear: both;"></div>
+      <div id="graph"></div>
+    </div>
+    <div id="table"></div>
+
+    <script>
+      var eventSelect = $('#eventSelect').MPSelect({
+        items: [
+          {label: 'MoviePlay', value: 'MoviePlay'},
+          {label: 'MovieEnd', value: 'MovieEnd'}
+        ]
+      }).on('change', function() {
+        if ($(this).val() == 'MovieEnd') {
+          $('#timeFieldWrap').show();
+        } else {
+          $('#timeFieldWrap').hide();
+          $('#timeFieldSelect').val('');
+        }
+        runQuery();
+      });
+      var timeFieldSelect = $('#timeFieldSelect').MPSelect({
+        items: [
+          {label: 'no time condition', value: ''},
+          {label: 'remaining time', value: 'remainingtime'},
+          {label: 'elapsed time', value: 'elapsedtime'},
+        ]
+      }).on('change', function() {
+        if ($(this).val()) {
+          $('#timeConditionWrap').show();
+        } else {
+          $('#timeConditionWrap').hide();
+        }
+        runQuery();
+      });
+      var timeConditionSelect = $('#timeConditionSelect').MPSelect({
+        items: [
+          {label: 'is greater than', value: '>'},
+          {label: 'is less than', value: '<'}
+        ]
+      }).val('<').on('change', runQuery)
+      var timeValueSelect = $('#timeValueSelect').MPSelect({
+        items: [
+          {label: '1 minute', value: 60},
+          {label: '5 minutes', value: 5*60},
+          {label: '10 minutes', value: 10*60},
+          {label: '15 minutes', value: 15*60},
+          {label: '30 minutes', value: 30*60},
+          {label: '45 minutes', value: 30*60},
+          {label: '60 minutes', value: 60*60},
+        ]
+      }).val(10*60).on('change', runQuery)
+
+
+      var accountTypeSelect = $('#accountTypeSelect').MPSelect({
+        items: [
+          {label: 'All Account Types', value: ''},
+          {label: 'asiaplay', value: 'asiaplay'},
+          {label: 'foxconn', value: 'foxconn'},
+          {label: 'facebook', value: 'facebook'},
+          {label: 'indihome', value: 'indihome'},
+        ]
+      }).on('change', runQuery);
+      var accountStatusSelect = $('#accountStatusSelect').MPSelect({
+        items: [
+          {label: 'All Account Statuses', value: ''},
+          {label: 'basic', value: 'basic'},
+          {label: 'premium', value: 'premium'},
+          {label: 'vip', value: 'vip'},
+        ]
+      }).on('change', runQuery);
+      var countrySelect = $('#countrySelect').MPSelect({
+        items: [
+          {label: 'All Countries', value: ''},
+          {label: 'Taiwan', value: 'TW'},
+          {label: 'Indonesia', value: 'ID'},
+          {label: 'Singapore', value: 'SG'}
+        ]
+      }).val('TW').on('change', runQuery);
+      var dateSelect  = $('#dateSelect').MPDatepicker().on('change', runQuery);
+
+      var eventGraph = $('#graph').MPChart({
+        chartType: 'bar',
+        xLabel: 'Devices Used',
+        yLabel: 'Users'
+      });
+      var eventTable = $('#table').MPTable({firstColHeader: 'Devices Used'}).MPTable('setData', {'': { Users: null }});
+      eventGraph.MPChart('setData', null);
+
+      var currentQuery;
+
+      function runQuery() {
+        if (currentQuery) {
+          currentQuery.abort && currentQuery.abort();
+        }
+        var accountType = accountTypeSelect.val();
+        var accountStatus = accountStatusSelect.val();
+        var country = countrySelect.val();
+        var date = dateSelect.val();
+
+        var event = eventSelect.val();
+        var timeField = timeFieldSelect.val();
+        var timeCondition = timeConditionSelect.val();
+        var timeValue = timeValueSelect.val();
+
+        var selector = '(defined (properties["deviceType"]))';
+        if (country) {
+          selector += ' and properties["mp_country_code"] == "'+country+'"'
+        }
+        if (accountType) {
+          selector += ' and properties["accountType"] == "'+accountType+'"'
+        }
+        if (accountStatus) {
+          selector += ' and properties["accountStatus"] == "'+accountStatus+'"'
+        }
+
+        if (timeField) {
+          selector += (selector ? ' and ' : '') + 'properties["'+timeField+'"] '+timeCondition+' '+timeValue+' and (defined (properties["'+timeField+'"]))'
+        }
+
+        var params = {
+          from_date: date.from.toISOString().split('T')[0],
+          to_date: date.to.toISOString().split('T')[0],
+          event_selectors: [{
+            event: event, selector: selector
+          }]
+        };
+
+        currentQuery = MP.api.jql(function main() {
+          return Events(params)
+          .groupBy(['distinct_id', 'properties.deviceType'], mixpanel.reducer.null())
+          .groupBy(['key.0'], function(accumulator, items) {
+            var deviceTypes = [];
+            var all = accumulator.concat(items);
+            for (var i = 0; i < all.length; i++) {
+              deviceTypes.push(all[i].key[1])
+            }
+            deviceTypes.sort();
+            return deviceTypes;
+          })
+          .groupBy(['value'], mixpanel.reducer.count())
+        }, params);
+
+        console.log(currentQuery.readyState);
+        window.x = currentQuery;
+
+        currentQuery.done(function(results) {
+          if (!results.length) {
+            alert('No data found for selected conditions and date range');
+          }
+          results.sort(function(a, b) {
+            return b.value - a.value;
+          })
+          var chartValues = {};
+          var tableValues = {};
+          for (var i = 0; i < results.length; i++) {
+            var key;
+            if (results[i].key.length == 1) {
+              key = results[i].key[0] + ' only';
+            } else {
+              key = results[i].key.join(' + ');
+            }
+            chartValues[key] = results[i].value;
+            tableValues[key] = { Users: results[i].value }
+          }
+          eventTable.MPTable('setData', tableValues);
+          eventGraph.MPChart('setData', chartValues);
+        });
+      }
+      runQuery();
+    </script>
+  </body>
+</html>
